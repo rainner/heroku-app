@@ -1,0 +1,23 @@
+{
+  "name": "codepen-fetch",
+  "version": "1.0.0",
+  "description": "Heroku test app for fetching showcase pens from my public codepen profile.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rainner/codepen-fetch.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/rainner/codepen-fetch/issues"
+  },
+  "homepage": "https://github.com/rainner/codepen-fetch#readme",
+  "dependencies": {
+    "express": "^4.16.4"
+  }
+}
