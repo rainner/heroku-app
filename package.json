@@ -4,7 +4,7 @@
   "description": "Heroku test app for fetching showcase pens from my public codepen profile.",
   "main": "index.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "nodemon server.js"
   },
   "repository": {
     "type": "git",
