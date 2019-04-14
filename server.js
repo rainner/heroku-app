@@ -2,14 +2,14 @@
  * App
  */
 const express = require( 'express' );
-const axios   = require( 'axios' );
+const request = require( 'request' );
 const port    = process.env.PORT || 8080;
 const app     = express();
 
 /**
- * Send CORS response.
+ * Send CORS res.
  */
-function sendCORS( request, response ) {
+function sendCORS( req, res ) {
   const headers = { 'access-control-allow-origin': '*' };
 
   if ( request.headers[ 'access-control-request-method' ] ) {
@@ -21,98 +21,110 @@ function sendCORS( request, response ) {
     delete request.headers[ 'access-control-request-headers' ];
   }
   headers[ 'access-control-expose-headers' ] = Object.keys( headers ).join( ',' );
-  response.writeHead( 200, headers );
-  response.end();
+  res.writeHead( 200, headers );
+  res.end();
 }
 
 /**
  * Send plain text response
  */
-function sendText( status, request, response, output ) {
-  response.status( status );
-  response.set( 'Content-Type', 'text/plain' );
-  response.send( output );
+function sendText( status, req, res, output ) {
+  res.status( status );
+  res.set( 'Content-Type', 'text/plain' );
+  res.send( output );
 }
 
 /**
  * Send html response
  */
-function sendHtml( status, request, response, output ) {
-  response.status( status );
-  response.set( 'Content-Type', 'text/html' );
-  response.send( output );
+function sendHtml( status, req, res, output ) {
+  res.status( status );
+  res.set( 'Content-Type', 'text/html' );
+  res.send( output );
 }
 
 /**
  * Send json object response
  */
-function sendJson( status, request, response, output ) {
-  response.status( status );
-  response.set( 'Content-Type', 'application/json' );
-  response.send( output );
+function sendJson( status, req, res, output ) {
+  res.status( status );
+  res.set( 'Content-Type', 'application/json' );
+  res.send( output );
 }
 
 /**
  * Send error json object response
  */
-function sendError( status, request, response, error ) {
+function sendError( status, req, res, error ) {
   const output = JSON.stringify( { status, error } );
-  console.error( 'ERROR ('+ status +'):', output );
-  sendJson( status, request, response, output );
+  console.error( 'Error:', output );
+  sendJson( status, req, res, output );
 }
 
 
 /**
  * Main route
  */
-app.get( '/', function( request, response ) {
+app.get( '/', function( req, res ) {
 
-  if ( request.method === 'OPTIONS' ) {
-    return sendCORS( request, response );
+  if ( req.method === 'OPTIONS' ) {
+    return sendCORS( req, res );
   }
-  sendText( 200, request, response, 'Hello world.' );
+  sendText( 200, req, res, 'Hello world.' );
 });
 
 /**
  * Test route
  */
-app.get( '/test', function( request, response ) {
+app.get( '/test', function( req, res ) {
 
-  if ( request.method === 'OPTIONS' ) {
-    return sendCORS( request, response );
+  if ( req.method === 'OPTIONS' ) {
+    return sendCORS( req, res );
   }
-  sendText( 200, request, response, 'Test route.' );
+  sendText( 200, req, res, 'Test route.' );
 });
 
 /**
  * Codepen route
  */
-app.get( '/codepen', function( request, response ) {
+app.get( '/codepen', function( req, res ) {
 
-  if ( request.method === 'OPTIONS' ) {
-    return sendCORS( request, response );
+  if ( req.method === 'OPTIONS' ) {
+    return sendCORS( req, res );
   }
 
   const options = {
     method: 'GET',
-    url: 'https://codepen.io/rainner/public/feed/',
-    responseType: 'text',
-    headers: {
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.96 Safari/537.36',
-      'Referer': 'https://codepen.io/rainner/',
-      'Cache-Control': 'no-cache',
-      'DNT': 1,
-    }
+    url: 'https://codepen.io/rainner/pens/popular/grid/',
+    responseType: 'json',
   };
 
-  axios( options ).then( res => {
-    sendText( 200, request, response, res.data || 'ok' );
-  })
-  .catch( e => {
-    const error = `Could not fetch content from ${options.url} with message: ${e.message || 'none'}.`;
-    sendError( 500, request, response, error );
+  request( options, function( err, response, body ) {
+    const status = response.statusCode || 0;
+    const server = response.headers.server || 'Unknown';
+
+    console.log( '\n', '-'.repeat( 30 ) );
+    console.log( `Server-response (${server}):`, status );
+
+    if ( err || !status || status >= 400 ) {
+      const error = `Could not fetch remote content (${options.url}). The server (${server}) responded with status code ${status}.`;
+      return sendError( status, req, res, error );
+    }
+
+    let output = {};
+    let data   = {};
+
+    try { data = JSON.parse( body || '{}' ); }
+    catch ( e ) {}
+
+    if ( data && data.page && data.page.html ) {
+      // parse html response and build output
+      // ...
+    }
+
+    sendJson( 200, req, res, JSON.stringify( output ) );
   });
+
 });
 
 /**
