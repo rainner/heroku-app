@@ -3,22 +3,39 @@
  */
 const express = require( 'express' );
 const request = require( 'request' );
+const cheerio = require( 'cheerio' );
 const port    = process.env.PORT || 8080;
 const app     = express();
 
 /**
- * Send CORS res.
+ * Params
+ */
+let baseUrl     = `https://codepen.io/rainner`;
+let endpointUrl = `${baseUrl}/pens/showcase/grid/`;
+let cookieRetry = true;
+let cookieCount = 0;
+let cookieLimit = 3;
+
+/**
+ * Sanitize text
+ */
+function sanitizeText( text ) {
+  return String( text || '' ).replace( /[\t\r\n\s]+/g, ' ' ).trim();
+}
+
+/**
+ * Send cors response
  */
 function sendCORS( req, res ) {
   const headers = { 'access-control-allow-origin': '*' };
 
-  if ( request.headers[ 'access-control-request-method' ] ) {
-    headers[ 'access-control-allow-methods' ] = request.headers[ 'access-control-request-method' ];
-    delete request.headers[ 'access-control-request-method' ];
+  if ( req.headers[ 'access-control-request-method' ] ) {
+    headers[ 'access-control-allow-methods' ] = req.headers[ 'access-control-request-method' ];
+    delete req.headers[ 'access-control-request-method' ];
   }
-  if ( request.headers[ 'access-control-request-headers' ] ) {
-    headers[ 'access-control-allow-headers' ] = request.headers[ 'access-control-request-headers' ];
-    delete request.headers[ 'access-control-request-headers' ];
+  if ( req.headers[ 'access-control-request-headers' ] ) {
+    headers[ 'access-control-allow-headers' ] = req.headers[ 'access-control-request-headers' ];
+    delete req.headers[ 'access-control-request-headers' ];
   }
   headers[ 'access-control-expose-headers' ] = Object.keys( headers ).join( ',' );
   res.writeHead( 200, headers );
@@ -75,10 +92,7 @@ function getClientCookie( request ) {
   if ( request && request.headers && request.headers['cookie'] ) {
     for ( let cookie of String( request.headers['cookie'] ).split( ';' ) ) {
       cookie = String( cookie ).trim();
-
-      if ( isCFCookie( cookie ) ) {
-        return cookie;
-      }
+      if ( isCFCookie( cookie ) ) return cookie;
     }
   }
   return '';
@@ -91,10 +105,7 @@ function getServerCookie( response ) {
   if ( response && response.headers && Array.isArray( response.headers['set-cookie'] ) ) {
     for ( let cookie of response.headers['set-cookie'] ) {
       cookie = String( cookie ).split( ';' ).shift().trim();
-
-      if ( isCFCookie( cookie ) ) {
-        return cookie;
-      }
+      if ( isCFCookie( cookie ) ) return cookie;
     }
   }
   return '';
@@ -119,11 +130,13 @@ function makeRequest( options, callback ) {
       const cookie = getServerCookie( response );
 
       // set cookie and resend the request...
-      if ( cookie ) {
+      if ( cookie && cookieRetry && cookieCount < cookieLimit ) {
+        cookieCount += 1;
         options.headers['cookie'] = cookie;
         return makeRequest( options, callback );
       }
     }
+    cookieCount = 0;
     return callback( false, response, body );
   });
 }
@@ -132,39 +145,21 @@ function makeRequest( options, callback ) {
  * Main route
  */
 app.get( '/', function( req, res ) {
-
-  if ( req.method === 'OPTIONS' ) {
-    return sendCORS( req, res );
-  }
-  sendText( 200, req, res, 'Hello world.' );
-});
-
-/**
- * Test route
- */
-app.get( '/test', function( req, res ) {
-
-  if ( req.method === 'OPTIONS' ) {
-    return sendCORS( req, res );
-  }
-  sendText( 200, req, res, 'Test route.' );
+  sendText( 200, req, res, 'Nothing to see here.' );
 });
 
 /**
  * Codepen route
  */
 app.get( '/codepen', function( req, res ) {
-
-  if ( req.method === 'OPTIONS' ) {
-    return sendCORS( req, res );
-  }
+  if ( req.method === 'OPTIONS' ) return sendCORS( req, res );
 
   const options = {
     method: 'GET',
-    url: 'https://codepen.io/rainner/pens/popular/grid/',
+    url: endpointUrl,
     headers: {
       'cookie': getClientCookie( req ),
-      'referer': 'https://codepen.io/',
+      'referer': endpointUrl,
       'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
       'user-agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.96 Safari/537.36',
       'upgrade-insecure-requests': '1',
@@ -173,22 +168,13 @@ app.get( '/codepen', function( req, res ) {
       'dnt': '1',
     }
   };
-
   makeRequest( options, function( error, response, body ) {
-
-    // console.log( 'Error:', error );
-    // console.log( 'Status:', response ? response.statusCode : 0 );
-    // console.log( 'Headers:', response ? response.headers : {} );
-    // console.log( body );
-
-    // sendText( 200, req, res, body );
-    // return;
-
     const status  = response ? response.statusCode || 0 : 0;
     const server  = response ? response.headers.server || 'n/a' : 'n/a';
     const failed  = `Could not fetch remote content from (${options.url}).`;
 
     console.log( '-'.repeat( 60 ) );
+    console.log( options.method, options.url );
     console.log( `Server-response (${server}):`, status );
 
     if ( error || !status ) {
@@ -202,20 +188,33 @@ app.get( '/codepen', function( req, res ) {
       return sendError( status, req, res, output );
     }
 
-    return sendJson( status, req, res, body );
+    let data = {};
+    let output = [];
 
-    // let output = {};
-    // let data   = {};
+    // try to parse json response body
+    try { data = JSON.parse( body || '{}' ); }
+    catch ( e ) { console.error( 'Error parsing response body.' ); }
 
-    // try { data = JSON.parse( body || '{}' ); }
-    // catch ( e ) {}
+    // parse html response and build output
+    if ( data && data.page && data.page.html ) {
+      const $ = cheerio.load( data.page.html );
 
-    // if ( data && data.page && data.page.html ) {
-    //   // parse html response and build output
-    //   // ...
-    // }
+      // each showcase pen container
+      $( '.single-pen' ).each( function( elm, i ) {
+        let wrap    = $( this );
+        let hash    = sanitizeText( wrap.data( 'slug-hash' ) );
+        let url     = `${baseUrl}/full/${hash}/`;
+        let image   = `${baseUrl}/pen/${hash}/image/large.png`;
+        let title   = sanitizeText( $( '.item-title > a', wrap ).text() );
+        let info    = sanitizeText( $( '.meta-overlay > p', wrap ).text() );
+        let views   = sanitizeText( $( '.stats > .views', wrap ).text() );
+        let replies = sanitizeText( $( '.stats > .comments', wrap ).text() );
 
-    // sendJson( 200, req, res, JSON.stringify( output ) );
+        if ( !hash || !title ) return;
+        output.push( { hash, url, image, title, info, views, replies } );
+      });
+    }
+    sendJson( 200, req, res, JSON.stringify( output ) );
   });
 
 });
