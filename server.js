@@ -24,25 +24,6 @@ function sanitizeText( text ) {
 }
 
 /**
- * Send cors response
- */
-function sendCORS( req, res ) {
-  const headers = { 'access-control-allow-origin': '*' };
-
-  if ( req.headers[ 'access-control-request-method' ] ) {
-    headers[ 'access-control-allow-methods' ] = req.headers[ 'access-control-request-method' ];
-    delete req.headers[ 'access-control-request-method' ];
-  }
-  if ( req.headers[ 'access-control-request-headers' ] ) {
-    headers[ 'access-control-allow-headers' ] = req.headers[ 'access-control-request-headers' ];
-    delete req.headers[ 'access-control-request-headers' ];
-  }
-  headers[ 'access-control-expose-headers' ] = Object.keys( headers ).join( ',' );
-  res.writeHead( 200, headers );
-  res.end();
-}
-
-/**
  * Send plain text response
  */
 function sendText( status, req, res, output ) {
@@ -142,6 +123,21 @@ function makeRequest( options, callback ) {
 }
 
 /**
+ * Cors middleware
+ */
+app.use( function( req, res, next ) {
+  res.header( 'access-control-allow-origin', '*' );
+
+  if ( req.headers[ 'access-control-request-method' ] ) {
+    res.header( 'access-control-allow-methods', req.headers[ 'access-control-request-method' ] );
+  }
+  if ( req.headers[ 'access-control-request-headers' ] ) {
+    res.header( 'access-control-allow-headers', req.headers[ 'access-control-request-headers' ] );
+  }
+  next();
+});
+
+/**
  * Main route
  */
 app.get( '/', function( req, res ) {
@@ -152,7 +148,8 @@ app.get( '/', function( req, res ) {
  * Codepen route
  */
 app.get( '/codepen', function( req, res ) {
-  if ( req.method === 'OPTIONS' ) return sendCORS( req, res );
+  console.log( '-'.repeat( 60 ) );
+  console.log( req.method, req.url );
 
   const options = {
     method: 'GET',
