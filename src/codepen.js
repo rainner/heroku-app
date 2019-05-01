@@ -8,22 +8,12 @@ const utils   = require( './utils' );
 
 module.exports = function( req, res ) {
 
-  const base     = `https://codepen.io/rainner`;
-  const endpoint = `${base}/pens/showcase/grid/`;
-  const options  = {
-    method: 'GET',
-    url: endpoint,
-    headers: {
-      'referer': endpoint,
-      'cookie': network.getClientCookie( req ),
-      'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-      'user-agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.96 Safari/537.36',
-      'upgrade-insecure-requests': '1',
-      'cache-control': 'no-cache',
-      'pragma': 'no-cache',
-      'dnt': '1',
-    }
-  };
+  const method  = 'GET';
+  const host    = `codepen.io`;
+  const profile = `https://${host}/rainner`;
+  const url     = `${profile}/pens/showcase/grid/`;
+  const headers = Object.assign( { cookie: '' }, req.headers, { host } );
+  const options = { method, url, headers };
 
   network.logIncoming( req );
   network.makeRequest( options, function( error, response, body ) {

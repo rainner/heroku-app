@@ -86,31 +86,19 @@ module.exports = {
     return '';
   },
 
-  // Check if a cookie is a cloudflare uid cookie
-  isCFCookie( cookie ) {
-    return ( cookie && cookie.indexOf( '__cfduid' ) >= 0 );
-  },
-
-  // Look for cloudflare cookie from client request
-  getClientCookie( request ) {
-    if ( request && request.headers && request.headers['cookie'] ) {
-      for ( let cookie of String( request.headers['cookie'] ).split( ';' ) ) {
-        cookie = String( cookie ).trim();
-        if ( this.isCFCookie( cookie ) ) return cookie;
-      }
-    }
-    return '';
-  },
-
-  // Look for cloudflare cookie from server response
+  // Look for cloudflare cookies from server response
   getServerCookie( response ) {
+    let output = [];
+
     if ( response && response.headers && Array.isArray( response.headers['set-cookie'] ) ) {
       for ( let cookie of response.headers['set-cookie'] ) {
+
         cookie = String( cookie ).split( ';' ).shift().trim();
-        if ( this.isCFCookie( cookie ) ) return cookie;
+        if ( cookie.indexOf( '__cfduid' ) >= 0 ) output.push( cookie );
+        if ( cookie.indexOf( '__cfruid' ) >= 0 ) output.push( cookie );
       }
     }
-    return '';
+    return output.join( '; ' );
   },
 
   // Make a request, try to bypass cloudflare cookie check
@@ -121,29 +109,33 @@ module.exports = {
 
       const status = response ? response.statusCode || 0 : 0;
       const server = response ? response.headers.server || 'n/a' : 'n/a';
+      const cookie = this.getServerCookie( response );
 
       // could not even make the request, abort
       if ( error ) {
         return callback( new Error( error.message || `There was a problem sending the request.` ) );
       }
+
       // something wrong with the request, or response, abort
       if ( !response ) {
         return callback( new Error( `No response object for the current request.` ) );
       }
+
       // request denied, look for uid cookie
       if ( response.statusCode >= 400 ) {
-        const cookie = this.getServerCookie( response );
 
         // set cookie and resend the request...
-        if ( cookie && this._retry && this._retryCount < this._retryMax ) {
+        if ( cookie && this._retry && this._retryCount <= this._retryMax ) {
           this._retryCount += 1;
-          options.headers['cookie'] = cookie;
+          options.headers.cookie = cookie;
           return this.makeRequest( options, callback );
         }
+
         // done retrying, abort
         this._retryCount = 0;
         return callback( new Error( `The server (${server}) responded with status code ${status}.` ) );
       }
+
       // looks good...
       this._retryCount = 0;
       return callback( false, response, body );
