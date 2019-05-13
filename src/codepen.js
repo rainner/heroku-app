@@ -3,31 +3,22 @@
  * Fetch and parse showcase pens from codepen.io
  */
 const cheerio = require( 'cheerio' );
+const scraper = require( 'cloudscraper' );
 const network = require( './network' );
 const utils   = require( './utils' );
 
 module.exports = function( req, res ) {
 
-  const method  = 'GET';
-  const host    = `codepen.io`;
-  const profile = `https://${host}/rainner`;
-  const url     = `${profile}/pens/showcase/grid/`;
-  const headers = Object.assign( { cookie: '' }, req.headers, { host } );
-  const options = { method, url, headers };
+  const profile  = `https://codepen.io/rainner`;
+  const endpoint = `${profile}/pens/showcase/grid/`;
 
   network.logIncoming( req );
-  network.makeRequest( options, function( error, response, body ) {
-
-    // something wrong with request
-    if ( error ) {
-      const output = error ? error.message || 'There was a problem making the request' : '';
-      return network.sendError( 500, res, `Could not fetch remote content from (${options.url}). ${output}.` );
-    }
+  scraper.get( endpoint ).then( response => {
 
     // try to parse json response body
     let output = [];
     let data = {};
-    try { data = JSON.parse( body || '{}' ); }
+    try { data = JSON.parse( response || '{}' ); }
     catch ( e ) {}
 
     // parse html response and build output
@@ -43,8 +34,8 @@ module.exports = function( req, res ) {
         let views   = utils.sanitize( $( '.stats > .views', wrap ).text() );
         let replies = utils.sanitize( $( '.stats > .comments', wrap ).text() );
         let likes   = utils.sanitize( $( '.loves > .count', wrap ).text() );
-        let image   = `${base}/pen/${hash}/image/large.png`;
-        let url     = `${base}/full/${hash}/`;
+        let image   = `${profile}/pen/${hash}/image/large.png`;
+        let url     = `${profile}/full/${hash}/`;
         if ( !hash || !title ) return;
 
         likes = ( likes ) ? likes : '0';
@@ -52,8 +43,11 @@ module.exports = function( req, res ) {
         output.push( { hash, url, image, title, info, views, replies, likes } );
       });
     }
-
     // success
     network.sendJson( 200, res, output );
+  })
+  .catch( error => {
+    const output = error ? error.message || 'There was a problem making the request' : '';
+    network.sendError( 500, res, `Could not fetch remote content from (${endpoint}). ${output}.` );
   });
 }
