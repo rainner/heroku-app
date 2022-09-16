@@ -8,4 +8,9 @@ module.exports = {
     return String( text || '' ).replace( /[\t\r\n\s]+/g, ' ' ).trim();
   },
 
+  //
+  test() {
+
+  },
+
 }
